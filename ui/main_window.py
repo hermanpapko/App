@@ -129,12 +129,12 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Meteo Planner PRO")
+        self.setWindowTitle("To-do")
         self.setMinimumSize(1000, 640)
 
         # Языки: ru, pl, en
         self.translations = self._build_translations()
-        self.lang = "ru"  # язык по умолчанию
+        self.lang = "en" # язык по умолчанию
 
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(16, 16, 16, 16)
@@ -163,7 +163,33 @@ class MainWindow(QMainWindow):
         self.view_mode = "day"
 
         # Применяем светлую, минималистичную тему с пастельными акцентами
+        self.theme = "dark"
         self.apply_styles()
+
+        # --------- LOAD SAVED THEME (settings in cache folder) ---------
+        import os, json
+        cache_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "cache"))
+        os.makedirs(cache_dir, exist_ok=True)
+        settings_path = os.path.join(cache_dir, "settings.json")
+
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, "r") as f:
+                    data = json.load(f)
+                    if data.get("theme") in ("light", "dark"):
+                        self.theme = data["theme"]
+                        self.btn_theme.setChecked(self.theme == "dark")
+                        self.btn_theme.setText("☀️" if self.theme == "dark" else "🌙")
+                        self.apply_styles()
+                    if data.get("lang") in ("ru", "pl", "en"):
+                        self.lang = data["lang"]
+                        # update combo to reflect saved language
+                        for i in range(self.lang_combo.count()):
+                            if self.lang_combo.itemData(i) == self.lang:
+                                self.lang_combo.setCurrentIndex(i)
+                                break
+            except Exception:
+                pass
 
         # Применить язык к уже созданным виджетам
         self.set_language(self.lang, initial=True)
@@ -182,7 +208,7 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout()
         layout.setContentsMargins(16, 12, 16, 12)
 
-        logo = QLabel("Meteo Planner PRO")
+        logo = QLabel("To-do")
         logo.setObjectName("appTitle")
 
         layout.addWidget(logo)
@@ -208,6 +234,15 @@ class MainWindow(QMainWindow):
         self.lang_combo.setCurrentIndex(0)
         self.lang_combo.currentIndexChanged.connect(self._on_lang_changed)
         layout.addWidget(self.lang_combo)
+
+        # Theme toggle button (Light/Dark)
+        self.btn_theme = QPushButton("🌙")
+        self.btn_theme.setObjectName("themeButton")
+        self.btn_theme.setCheckable(True)
+        self.btn_theme.setChecked(True)
+        self.btn_theme.setText("☀️")
+        self.btn_theme.clicked.connect(self.toggle_theme)
+        layout.addWidget(self.btn_theme)
 
         # Wiring: переключение режимов
         self.btn_day.clicked.connect(lambda: self.set_view_mode("day"))
@@ -307,6 +342,8 @@ class MainWindow(QMainWindow):
 
         # Плавающая круглая кнопка «+»
         self.fab_add = QPushButton("+")
+        self.fab_add.setFixedSize(48, 48)
+        self.fab_add.setStyleSheet("border-radius: 24px;")
         self.fab_add.setObjectName("fabAdd")
         self.fab_add.setToolTip("Добавить задачу")
         self.fab_add.clicked.connect(self.add_task_fab)
@@ -605,196 +642,417 @@ class MainWindow(QMainWindow):
             self.day_layout.addWidget(empty)
 
     # ---- Styles ----
+    def toggle_theme(self):
+        # Fade overlay
+        overlay = QWidget(self)
+        overlay.setStyleSheet("background: #000;")
+        overlay.setGeometry(self.rect())
+        overlay.raise_()
+        overlay.show()
+
+        from PySide6.QtWidgets import QGraphicsOpacityEffect
+        from PySide6.QtCore import QPropertyAnimation
+
+        effect = QGraphicsOpacityEffect(overlay)
+        overlay.setGraphicsEffect(effect)
+
+        # Keep animations as instance attributes to avoid garbage collection
+        self._anim_fade_in = QPropertyAnimation(effect, b"opacity")
+        self._anim_fade_in.setDuration(200)
+        self._anim_fade_in.setStartValue(0.0)
+        self._anim_fade_in.setEndValue(1.0)
+
+        def apply_theme():
+            if self.theme == "light":
+                self.theme = "dark"
+                self.btn_theme.setText("☀️")
+            else:
+                self.theme = "light"
+                self.btn_theme.setText("🌙")
+            self.apply_styles()
+
+            # --------- SAVE THEME TO SETTINGS (in cache folder) ---------
+            import os, json
+            cache_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "cache"))
+            os.makedirs(cache_dir, exist_ok=True)
+            settings_path = os.path.join(cache_dir, "settings.json")
+
+            try:
+                with open(settings_path, "w") as f:
+                    json.dump({"theme": self.theme}, f)
+            except Exception:
+                pass
+
+            # Fade out
+            self._anim_fade_out = QPropertyAnimation(effect, b"opacity")
+            self._anim_fade_out.setDuration(200)
+            self._anim_fade_out.setStartValue(1.0)
+            self._anim_fade_out.setEndValue(0.0)
+            self._anim_fade_out.finished.connect(overlay.deleteLater)
+            self._anim_fade_out.start()
+
+        self._anim_fade_in.finished.connect(apply_theme)
+        self._anim_fade_in.start()
+
     def apply_styles(self):
-        stylesheet = """
-        /* Base: светлая, минималистичная палитра */
-        QWidget { font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, Arial; font-size: 14px; color: #1F2937; background: #F8FAFC; }
+        if self.theme == "light":
+            stylesheet = """
+            /* Base: светлая, минималистичная палитра */
+            QWidget { font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, Arial; font-size: 14px; color: #1F2937; background: #F8FAFC; }
 
-        /* Header */
-        #headerBar { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; }
-        #headerBar QLabel#appTitle { color: #111827; font-size: 20px; font-weight: 700; letter-spacing: 0.2px; }
-        QPushButton#profileButton { background: #F3F4F6; border: 1px solid #E5E7EB; color: #6B7280; border-radius: 18px; padding: 6px 10px; }
-        QPushButton#profileButton:hover { background: #E5E7EB; }
+            /* Header */
+            #headerBar { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; }
+            #headerBar QLabel#appTitle { color: #111827; font-size: 20px; font-weight: 700; letter-spacing: 0.2px; }
+            QPushButton#profileButton { background: #F3F4F6; border: 1px solid #E5E7EB; color: #6B7280; border-radius: 18px; padding: 6px 10px; }
+            QPushButton#profileButton:hover { background: #E5E7EB; }
 
-        /* Segmented control */
-        QPushButton#segButton { background: #F3F4F6; border: 1px solid #E5E7EB; color: #4B5563; border-radius: 8px; padding: 6px 12px; }
-        QPushButton#segButton:hover { background: #EAECEF; }
-        QPushButton#segButton:checked { background: #EEF2FF; color: #4F46E5; border-color: #C7D2FE; }
+            /* Segmented control */
+            QPushButton#segButton { background: #F3F4F6; border: 1px solid #E5E7EB; color: #4B5563; border-radius: 8px; padding: 6px 12px; }
+            QPushButton#segButton:hover { background: #EAECEF; }
+            QPushButton#segButton:checked { background: #EEF2FF; color: #4F46E5; border-color: #C7D2FE; }
 
-        /* Language Combo — improved pastel/rounded design */
-        QComboBox#langCombo {
-            background: #FFFFFF;
-            border: 1.5px solid #D8DAE0;
-            color: #374151;
-            border-radius: 12px;
-            padding: 8px 40px 8px 14px;
-            min-width: 150px;
-        }
+            /* Language Combo — improved pastel/rounded design */
+            QComboBox#langCombo {
+                background: #FFFFFF;
+                border: 1.5px solid #D8DAE0;
+                color: #374151;
+                border-radius: 12px;
+                padding: 8px 40px 8px 14px;
+                min-width: 150px;
+                combobox-popup: 0;
+            }
 
-        QComboBox#langCombo:hover {
-            background: #F4F6FB;
-            border-color: #C7D2FE;
-        }
+            QComboBox#langCombo:hover {
+                background: #F4F6FB;
+                border-color: #C7D2FE;
+            }
 
-        QComboBox#langCombo:focus {
-            border-color: #A5B4FC;
-        }
+            QComboBox#langCombo:focus {
+                border-color: #A5B4FC;
+            }
 
-        QComboBox#langCombo:disabled {
-            color: #9CA3AF;
-            background: #F3F4F6;
-        }
+            QComboBox#langCombo:disabled {
+                color: #9CA3AF;
+                background: #F3F4F6;
+            }
 
-        /* Dropdown arrow container */
-        QComboBox#langCombo::drop-down {
-            subcontrol-origin: padding;
-            subcontrol-position: top right;
-            width: 32px;
-            border-left: 1px solid #D8DAE0;
-            background: #F4F6FB;
-            border-top-right-radius: 12px;
-            border-bottom-right-radius: 12px;
-        }
+            /* Dropdown arrow container */
+            QComboBox#langCombo::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 32px;
+                border-left: 1px solid #D8DAE0;
+                background: #F4F6FB;
+                border-top-right-radius: 12px;
+                border-bottom-right-radius: 12px;
+            }
 
-        QComboBox#langCombo::drop-down:hover {
-            background: #ECEFFF;
-            border-left: 1px solid #C7D2FE;
-        }
+            QComboBox#langCombo::drop-down:hover {
+                background: #ECEFFF;
+                border-left: 1px solid #C7D2FE;
+            }
 
-        /* Arrow icons */
-        QComboBox#langCombo::down-arrow {
-            image: url(ui/assets/chevron-down.svg);
-            width: 16px;
-            height: 16px;
-            margin-right: 8px;
-        }
+            /* Arrow icons */
+            QComboBox#langCombo::down-arrow {
+                image: url(ui/assets/chevron-down.svg);
+                width: 14px;
+                height: 14px;
+                margin-top: 1px;
+            }
 
-        QComboBox#langCombo::down-arrow:on {
-            image: url(ui/assets/chevron-up.svg);
-            width: 16px;
-            height: 16px;
-            margin-right: 8px;
-        }
+            QComboBox#langCombo::down-arrow:on {
+                image: url(ui/assets/chevron-up.svg);
+                width: 14px;
+                height: 14px;
+                margin-top: 1px;
+            }
 
-        /* Opened state */
-        QComboBox#langCombo:on {
-            border-color: #A5B4FC;
-        }
+            /* Opened state */
+            QComboBox#langCombo:on {
+                border-color: #A5B4FC;
+            }
 
-        QComboBox#langCombo::drop-down:on {
-            background: #EEF2FF;
-            border-left: 1px solid #A5B4FC;
-        }
+            QComboBox#langCombo::drop-down:on {
+                background: #EEF2FF;
+                border-left: 1px solid #A5B4FC;
+            }
 
-        /* Popup list */
-        QComboBox#langCombo QAbstractItemView {
-            background: #FFFFFF;
-            border: 1.5px solid #D8DAE0;
-            border-radius: 12px;
-            outline: none;
-            padding: 6px 0;
-        }
+            /* Popup list */
+            QComboBox#langCombo QAbstractItemView {
+                background: #FFFFFF;
+                border: 1.5px solid #D8DAE0;
+                border-radius: 12px;
+                outline: none;
+                padding: 6px 0;
+            }
 
-        QComboBox#langCombo QAbstractItemView::item {
-            padding: 10px 14px;
-            color: #111827;
-            border-radius: 6px;
-        }
+            QComboBox#langCombo QAbstractItemView::item {
+                padding: 10px 14px;
+                color: #111827;
+                border-radius: 6px;
+            }
 
-        QComboBox#langCombo QAbstractItemView::item:hover {
-            background: #F4F6FB;
-        }
+            QComboBox#langCombo QAbstractItemView::item:hover {
+                background: #F4F6FB;
+            }
 
-        QComboBox#langCombo QAbstractItemView::item:selected {
-            background: #EEF2FF;
-            color: #4F46E5;
-        }
+            QComboBox#langCombo QAbstractItemView::item:selected {
+                background: #EEF2FF;
+                color: #4F46E5;
+            }
 
-        /* Left column */
-        #leftColumn { }
-        QCalendarWidget#monthCalendar { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; }
-        QCalendarWidget#monthCalendar QWidget#qt_calendar_navigationbar { background: #FFFFFF; }
-        QCalendarWidget#monthCalendar QToolButton { color: #374151; background: transparent; border: none; padding: 6px; }
-        QCalendarWidget#monthCalendar QToolButton:hover { background: #F3F4F6; border-radius: 6px; }
-        QCalendarWidget#monthCalendar QAbstractItemView:enabled { selection-background-color: #EDE9FE; selection-color: #4F46E5; background: #FFFFFF; color: #111827; outline: none; }
+            /* Left column */
+            #leftColumn { }
+            QCalendarWidget#monthCalendar { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; }
+            QCalendarWidget#monthCalendar QWidget#qt_calendar_navigationbar { background: #FFFFFF; }
+            QCalendarWidget#monthCalendar QToolButton { color: #374151; background: transparent; border: none; padding: 6px; }
+            QCalendarWidget#monthCalendar QToolButton:hover { background: #F3F4F6; border-radius: 6px; }
+            QCalendarWidget#monthCalendar QAbstractItemView:enabled { selection-background-color: #EDE9FE; selection-color: #4F46E5; background: #FFFFFF; color: #111827; outline: none; }
 
-        #tasksPanel { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; }
-        #tasksPanel QLabel#sectionTitle { font-weight: 700; color: #111827; }
-        QListWidget { border: 1px solid #E5E7EB; border-radius: 10px; padding: 6px; background: #FFFFFF; }
-        QListWidget::item { padding: 8px 10px; }
-        QListWidget::item:hover { background: #F9FAFB; }
-        QListWidget::item:selected { background: #EEF2FF; color: #4F46E5; }
-        QListWidget::item:alternate { background: #FAFAFA; }
+            #tasksPanel { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; }
+            #tasksPanel QLabel#sectionTitle { font-weight: 700; color: #111827; }
+            QListWidget { border: 1px solid #E5E7EB; border-radius: 10px; padding: 6px; background: #FFFFFF; }
+            QListWidget::item { padding: 8px 10px; }
+            QListWidget::item:hover { background: #F9FAFB; }
+            QListWidget::item:selected { background: #EEF2FF; color: #4F46E5; }
+            QListWidget::item:alternate { background: #FAFAFA; }
 
-        /* Явный квадратный чекбокс у задач */
-        QListWidget::indicator {
-            width: 18px;
-            height: 18px;
-            margin-right: 8px; /* отступ от текста */
-        }
-        QListWidget::indicator:unchecked {
-            border: 2px solid #D1D5DB; /* явная рамка */
-            background: #FFFFFF;       /* белый фон */
-            border-radius: 3px;        /* почти квадратный, без сильного скругления */
-        }
-        QListWidget::indicator:unchecked:hover {
-            border-color: #9CA3AF;
-            background: #F9FAFB;
-        }
-        QListWidget::indicator:checked {
-            border: 2px solid #8B5CF6;
-            background: #8B5CF6;      /* заливка акцентом; галочка будет контрастной */
-            border-radius: 3px;
-        }
-        QListWidget::indicator:checked:hover {
-            background: #7C3AED;
-            border-color: #7C3AED;
-        }
+            /* Явный квадратный чекбокс у задач */
+            QListWidget::indicator {
+                width: 18px;
+                height: 18px;
+                margin-right: 8px; /* отступ от текста */
+            }
+            QListWidget::indicator:unchecked {
+                border: 2px solid #D1D5DB; /* явная рамка */
+                background: #FFFFFF;       /* белый фон */
+                border-radius: 3px;        /* почти квадратный, без сильного скругления */
+            }
+            QListWidget::indicator:unchecked:hover {
+                border-color: #9CA3AF;
+                background: #F9FAFB;
+            }
+            QListWidget::indicator:checked {
+                border: 2px solid #8B5CF6;
+                background: #8B5CF6;      /* заливка акцентом; галочка будет контрастной */
+                border-radius: 3px;
+            }
+            QListWidget::indicator:checked:hover {
+                background: #7C3AED;
+                border-color: #7C3AED;
+            }
 
-        /* Right column */
-        #dayHeader { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; }
-        QLabel#sectionTitle { font-weight: 700; color: #111827; }
-        QLabel#muted { color: #6B7280; }
-        #dayScroll { border: 1px solid #E5E7EB; border-radius: 12px; background: #FFFFFF; }
-        #dayContainer { background: transparent; }
-        #eventCard, QWidget#eventCard { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; }
+            /* Right column */
+            #dayHeader { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; }
+            QLabel#sectionTitle { font-weight: 700; color: #111827; }
+            QLabel#muted { color: #6B7280; }
+            #dayScroll { border: 1px solid #E5E7EB; border-radius: 12px; background: #FFFFFF; }
+            #dayContainer { background: transparent; }
+            #eventCard, QWidget#eventCard { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; }
 
-        /* FAB */
-        QPushButton#fabAdd { background: #8B5CF6; color: #FFFFFF; border: none; border-radius: 22px; font-size: 20px; font-weight: 700; padding: 8px 14px; }
-        QPushButton#fabAdd:hover { background: #7C3AED; }
-        QPushButton#fabAdd:pressed { background: #6D28D9; }
+            /* FAB */
+            QPushButton#fabAdd { background: #8B5CF6; color: #FFFFFF; border: none; border-radius: 22px; font-size: 20px; font-weight: 700; padding: 8px 14px; }
+            QPushButton#fabAdd:hover { background: #7C3AED; }
+            QPushButton#fabAdd:pressed { background: #6D28D9; }
 
-        /* Add Task Dialog */
-        QDialog#addDialog { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 14px; }
-        QDialog#addDialog QLabel#addTitle { font-size: 16px; font-weight: 700; color: #111827; }
-        QDialog#addDialog QLabel#addHint { color: #6B7280; }
-        QLineEdit#addInput { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10px; padding: 8px 10px; }
-        QLineEdit#addInput:focus { border-color: #C7D2FE; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
-        QPushButton#btnPrimary { background: #8B5CF6; color: #FFFFFF; border: none; border-radius: 10px; padding: 8px 14px; font-weight: 600; }
-        QPushButton#btnPrimary:hover { background: #7C3AED; }
-        QPushButton#btnPrimary:pressed { background: #6D28D9; }
-        QPushButton#btnPrimary:disabled { background: #E5E7EB; color: #9CA3AF; }
-        QPushButton#btnSecondary { background: #F3F4F6; color: #374151; border: 1px solid #E5E7EB; border-radius: 10px; padding: 8px 14px; }
-        QPushButton#btnSecondary:hover { background: #EAECEF; }
+            /* Add Task Dialog */
+            QDialog#addDialog { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 14px; }
+            QDialog#addDialog QLabel#addTitle { font-size: 16px; font-weight: 700; color: #111827; }
+            QDialog#addDialog QLabel#addHint { color: #6B7280; }
+            QLineEdit#addInput { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10px; padding: 8px 10px; }
+            QLineEdit#addInput:focus { border-color: #C7D2FE; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+            QPushButton#btnPrimary { background: #8B5CF6; color: #FFFFFF; border: none; border-radius: 10px; padding: 8px 14px; font-weight: 600; }
+            QPushButton#btnPrimary:hover { background: #7C3AED; }
+            QPushButton#btnPrimary:pressed { background: #6D28D9; }
+            QPushButton#btnPrimary:disabled { background: #E5E7EB; color: #9CA3AF; }
+            QPushButton#btnSecondary { background: #F3F4F6; color: #374151; border: 1px solid #E5E7EB; border-radius: 10px; padding: 8px 14px; }
+            QPushButton#btnSecondary:hover { background: #EAECEF; }
 
-        /* Confirm Dialog (удаление) */
-        QDialog#confirmDialog { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 14px; }
-        QDialog#confirmDialog QLabel#confirmTitle { font-size: 16px; font-weight: 700; color: #111827; }
-        QDialog#confirmDialog QLabel#confirmMessage { color: #374151; }
-        QPushButton#btnDanger { background: #EF4444; color: #FFFFFF; border: none; border-radius: 10px; padding: 8px 14px; font-weight: 600; }
-        QPushButton#btnDanger:hover { background: #DC2626; }
-        QPushButton#btnDanger:pressed { background: #B91C1C; }
-        
-        /* Scrollbars (light) */
-        QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
-        QScrollBar::handle:vertical { background: #E5E7EB; min-height: 24px; border-radius: 5px; }
-        QScrollBar::handle:vertical:hover { background: #D1D5DB; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
-        QScrollBar::handle:horizontal { background: #E5E7EB; min-width: 24px; border-radius: 5px; }
-        QScrollBar::handle:horizontal:hover { background: #D1D5DB; }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
-        """
+            /* Confirm Dialog (удаление) */
+            QDialog#confirmDialog { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 14px; }
+            QDialog#confirmDialog QLabel#confirmTitle { font-size: 16px; font-weight: 700; color: #111827; }
+            QDialog#confirmDialog QLabel#confirmMessage { color: #374151; }
+            QPushButton#btnDanger { background: #EF4444; color: #FFFFFF; border: none; border-radius: 10px; padding: 8px 14px; font-weight: 600; }
+            QPushButton#btnDanger:hover { background: #DC2626; }
+            QPushButton#btnDanger:pressed { background: #B91C1C; }
+            
+            /* Scrollbars (light) */
+            QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
+            QScrollBar::handle:vertical { background: #E5E7EB; min-height: 24px; border-radius: 5px; }
+            QScrollBar::handle:vertical:hover { background: #D1D5DB; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+            QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
+            QScrollBar::handle:horizontal { background: #E5E7EB; min-width: 24px; border-radius: 5px; }
+            QScrollBar::handle:horizontal:hover { background: #D1D5DB; }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+
+            QPushButton#themeButton {
+                background: #F3F4F6;
+                color: #6B7280;
+                border: 1px solid #E5E7EB;
+                border-radius: 10px;
+                padding: 6px 10px;
+            }
+            QPushButton#themeButton:hover { background: #EAECEF; }
+            """
+        else:
+            stylesheet = """
+            /* AMOLED DARK THEME — ultra deep black + subtle animations */
+            QWidget { 
+                font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, Arial; 
+                font-size: 14px; 
+                color: #E5E7EB; 
+                background: #000000;
+            }
+
+            /* HEADER */
+            #headerBar { background: #000000; border: 1px solid #1A1A1A; border-radius: 14px; }
+            #headerBar QLabel#appTitle { color: #FFFFFF; }
+
+            /* SEGMENTED BUTTONS */
+            QPushButton#segButton { 
+                background: #0D0D0D;
+                border: 1px solid #1F1F1F;
+                color: #D1D5DB;
+                border-radius: 10px;
+                padding: 6px 12px;
+            }
+            QPushButton#segButton:hover { background: #1A1A1A; }
+            QPushButton#segButton:checked { 
+                background: #4F46E5;
+                color: #FFFFFF;
+                border-color: #6366F1;
+            }
+
+            /* LANGUAGE SELECTOR */
+            QComboBox#langCombo {
+                background: #0D0D0D;
+                border: 1.5px solid #4F46E5;
+                color: #E5E7EB;
+                border-radius: 12px;
+                padding: 8px 40px 8px 14px;
+                min-width: 150px;
+                combobox-popup: 0;
+            }
+            QComboBox#langCombo:hover {
+                background: #111111;
+                border-color: #6366F1;
+            }
+            QComboBox#langCombo::drop-down {
+                background: #0D0D0D;
+                width: 36px;
+                border: none;
+                border-top-right-radius: 12px;
+                border-bottom-right-radius: 12px;
+            }
+            QComboBox#langCombo::drop-down:hover {
+                background: #111111;
+            }
+            QComboBox#langCombo::down-arrow {
+                image: url(ui/assets/chevron-down-white.svg);
+                width: 14px;
+                height: 14px;
+                margin-top: 1px;
+            }
+            QComboBox#langCombo::down-arrow:on {
+                image: url(ui/assets/chevron-up-white.svg);
+                width: 14px;
+                height: 14px;
+                margin-top: 1px;
+            }
+
+            QComboBox#langCombo QAbstractItemView { 
+                background: #000000; 
+                color: #FFFFFF; 
+                border: 1px solid #1F1F1F; 
+                selection-background-color: #1A1A1A;
+            }
+
+            /* TASKS PANEL */
+            #tasksPanel { background: #000000; border: 1px solid #1F1F1F; border-radius: 14px; }
+
+            QListWidget {
+                background: #000000;
+                border: 1px solid #1A1A1A;
+                color: #F1F5F9;
+            }
+            QListWidget::item:hover { background: #111111; }
+            QListWidget::item:selected { background: #1A1A1A; }
+            QListWidget::item {
+                padding: 8px 10px;
+            }
+            QListWidget::item:alternate {
+                background: #080808;
+            }
+
+            /* CHECKBOXES */
+            QListWidget::indicator {
+                width: 18px;
+                height: 18px;
+                border-radius: 4px;
+            }
+            QListWidget::indicator:unchecked {
+                background: #000000;
+                border: 2px solid #3A3A3A;
+            }
+            QListWidget::indicator:checked {
+                background: #6366F1;
+                border: 2px solid #6366F1;
+            }
+
+            /* DAY HEADER */
+            #dayHeader { background: #000000; border: 1px solid #1A1A1A; border-radius: 14px; }
+
+            /* EVENT CARDS */
+            #eventCard {
+                background: #000000;
+                border: 1px solid #1A1A1A;
+                border-radius: 14px;
+            }
+            #eventCard:hover {
+                background: #0A0A0A;
+                border-color: #333333;
+            }
+
+            /* FAB */
+            QPushButton#fabAdd {
+                background: #6366F1;
+                color: #FFFFFF;
+                border-radius: 24px;
+                font-size: 20px;
+                font-weight: bold;
+            }
+            QPushButton#fabAdd:hover {
+                background: #4F46E5;
+            }
+            QPushButton#fabAdd:pressed {
+                background: #4338CA;
+            }
+
+            /* THEME BUTTON */
+            QPushButton#themeButton {
+                background: #0D0D0D;
+                border: 1px solid #1F1F1F;
+                color: #E5E7EB;
+                border-radius: 10px;
+                padding: 6px 10px;
+            }
+            QPushButton#themeButton:hover {
+                background: #1A1A1A;
+            }
+
+            /* SCROLLBAR */
+            QScrollBar:vertical {
+                background: transparent;
+                width: 10px;
+            }
+            QScrollBar::handle:vertical {
+                background: #1F1F1F;
+                border-radius: 4px;
+                min-height: 24px;
+            }
+            QScrollBar::handle:vertical:hover { background: #333333; }
+            """
         self.setStyleSheet(stylesheet)
 
     # ---- Effects ----
@@ -893,6 +1151,25 @@ class MainWindow(QMainWindow):
         if lang not in ("ru", "pl", "en"):
             lang = "ru"
         self.lang = lang
+        # Save language to settings.json
+        try:
+            import os, json
+            cache_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "cache"))
+            os.makedirs(cache_dir, exist_ok=True)
+            settings_path = os.path.join(cache_dir, "settings.json")
+
+            # read existing settings
+            data = {}
+            if os.path.exists(settings_path):
+                with open(settings_path, "r") as f:
+                    data = json.load(f)
+
+            data["lang"] = self.lang  # update language
+
+            with open(settings_path, "w") as f:
+                json.dump(data, f)
+        except Exception:
+            pass
         # Установить локаль Qt для форматирования дат и календаря
         locale_map = {
             "ru": QLocale(QLocale.Russian, QLocale.Russia),
