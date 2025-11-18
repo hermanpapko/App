@@ -1,16 +1,22 @@
 # Meteo Planner PRO
 
-Prosta aplikacja desktopowa (PySide6) łącząca plan dnia z prognozą pogody.
+Desktopowa aplikacja (PySide6) z widokiem kalendarza i planera задач w nowoczesnym, jasnym (light) i minimalistycznym дизайне.
 
 Funkcje:
-- Wybór lokalizacji (geokodowanie Open‑Meteo, bez klucza API)
-- Wybór daty i podgląd prognozy dziennej: Tmax/Tmin, opady, wiatr
-- Lista zadań dla wybranej daty i lokalizacji: dodawanie, oznaczanie ukończonych, usuwanie
+- Kalendarz miesiąca po lewej i список задач z чекбоксами.
+- Расписание wybranego dnia po prawej: задачи отображаются w виде карточек z пастельными маркерами.
+- Быстрое добавление задач через плавающую круглую кнопку «+».
+ - Удаление задач: через видимую кнопку «🗑 Удалить» над списком, по правому клику (контекстное меню «Удалить») или клавишей Delete/Backspace — с стильным подтверждением.
 
 Design / Wygląd:
-- Nowoczesny wygląd z zaokrąglonymi kartami, delikatnymi cieniami i spójną kolorystyką
-- Tylko ciemny motyw (dark) — dopracowane szczegóły: focus/hover, scrollbary, kalendarz
-- Czytelne stany przycisków (primary/secondary/danger) i podświetlenia elementów
+- Jasny, czysty интерфейс na białym tle, pastelowe akcenty i miękkie cienie.
+- Верхняя панель с переключателями Day / Week / Month — теперь рабочими: переключают правую колонку между дневным, недельным и месячным видами; активный режим подсвечен.
+- Календарь месяца — лёгкая типографика, аккуратная подсветка выбранного дня сиреневым тоном.
+
+Języki / Языки / Languages:
+- Aplikacja wspiera 3 języki: Polski, Русский i English.
+- Переключатель языка находится в правой части верхней панели (combo: Polski / Русский / English).
+- Date names in the calendar and headers are localized via system QLocale.
 
 
 Wymagania
@@ -36,30 +42,23 @@ Instalacja
 
 
 Uwagi techniczne
-- Prognoza pogody korzysta z Open‑Meteo (https://open-meteo.com). Nie wymaga klucza.
-- Geokodowanie lokalizacji: endpoint geocoding-api.open-meteo.com.
-- Operacje sieciowe mają podstawową obsługę błędów i time‑out.
-- Dane zadań są przechowywane w tabeli tasks (task_date, text, location, done).
+- Dane zadań są przechowywane w tabeli tasks (task_date, text, location, done). W текущем дизайне lokalizacja nie jest wykorzystywana (można pozostawić puste).
+- Переключение даты осуществляется через календарь; список слева показывает задачи выбранного дня. Кнопки Day/Week/Month управляют тем, как отображаются задачи справа: за день, неделю (Пн‑Вс) или месяц (группами по датам).
+ - Удаление: выделите задачу и нажмите кнопку «🗑 Удалить» над списком. Также работает правый клик → «Удалить» или клавиша Delete/Backspace. Откроется аккуратный диалог подтверждения в общем светлом стиле.
 
 Struktura projektu
 - main.py – start aplikacji
-- ui/main_window.py – interfejs użytkownika (PySide6)
-- backend/logic.py – logika pogody (geokodowanie + prognoza)
+- ui/main_window.py – interfejs użytkownika (PySide6, светлая тема) + i18n (PL/RU/EN)
 - backend/database.py – warstwa dostępu do PostgreSQL (tworzenie tabel, CRUD zadań)
+- backend/logic.py – (opcjonalnie) wcześniejsza логика погоды; не используется в текущем дизайне
 
 
 Uwagi dot. motywów (PL/RU)
-- PL: Aplikacja używa wyłącznie ciemnego motywu. Styl zaimplementowany w apply_styles() (ui/main_window.py). Karty mają subtelne cienie (QGraphicsDropShadowEffect); dopracowano kalendarz, listy oraz scrollbary w trybie dark.
-- RU: Приложение использует только тёмную тему. Стиль задан в apply_styles() (ui/main_window.py). Карточки с аккуратными тенями; улучшены календарь, списки и скроллбары для тёмного режима.
+- PL: Aplikacja używa jasnego, minimalistycznego motywu. Styl zaimplementowany w apply_styles() (ui/main_window.py). Białe karty, pastelowe markery, delikatne cienie.
+- RU: Приложение использует светлую минималистичную тему. Стиль в apply_styles() (ui/main_window.py): белые карточки, пастельные маркеры, мягкие тени.
 
 
-FAQ (RU): Где взять API и что куда вставить?
-- Погода: приложение использует публичное API Open‑Meteo, оно НЕ ТРЕБУЕТ ключа. Ничего никуда вставлять не нужно.
-  - Эндпоинты: 
-    - Геокодирование: https://geocoding-api.open-meteo.com/v1/search
-    - Прогноз: https://api.open-meteo.com/v1/forecast
-  - Места в коде: backend/logic.py (константы GEOCODING_URL и FORECAST_URL). Комментарии в файле отмечают, что ключ не нужен.
-
+FAQ (RU)
 - База данных: необходимо настроить доступ к PostgreSQL.
   - Вариант 1: Создайте БД и пользователя как в примере:
     - База: app_db
@@ -72,9 +71,4 @@ FAQ (RU): Где взять API и что куда вставить?
     2) sudo -u postgres createdb app_db -O herman
     3) При необходимости выдать права: GRANT ALL PRIVILEGES ON DATABASE app_db TO herman;
 
-- Что делать, если нужен другой провайдер погоды с ключом API?
-  - Замените логику в backend/logic.py: 
-    - Добавьте ключ как параметр запроса (params={"apikey": "ВАШ_КЛЮЧ", ...}) или как заголовок (headers={"Authorization": "Bearer ВАШ_КЛЮЧ"}).
-    - Поменяйте URL на эндпоинты вашего провайдера (вместо FORECAST_URL/GEOCODING_URL).
-    - Сохраните формат возвращаемого словаря в get_weather (date, location_name, tmax, tmin, precipitation, wind_max), чтобы UI продолжал работать без изменений.
-  - Комментарии в backend/logic.py рядом с URL подскажут, где это делать.
+- Погода: в текущем дизайне погодные данные не отображаются. Модуль backend/logic.py оставлен для совместимости, но UI его не использует.
